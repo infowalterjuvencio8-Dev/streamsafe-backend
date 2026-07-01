@@ -1,0 +1,6 @@
+{
+  "name": "StreamSafe",
+  "description": "Premium streaming website with live TV, popular movies/series, full offline subscription validation flow, and robust administrator tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

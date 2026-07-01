@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --color-brand-red: #0066ff;
+  --color-brand-dark: #000000;
+  --color-brand-card: #141414;
+  --color-brand-card-hover: #1f1f1f;
+
+  /* Overriding core red utilities to brand blue shades to ensure smooth hover and active state integration */
+  --color-red-500: #0066ff;
+  --color-red-600: #0055dd;
+  --color-red-700: #0044cc;
+  --color-red-800: #0033bb;
+}
+
+/* Custom Base styles */
+body {
+  background-color: #000000;
+  color: #ffffff;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Slim professional dark scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f1f1f;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0066ff;
+}
+
+/* Text selections */
+::selection {
+  background-color: #0066ff;
+  color: #ffffff;
+}
+
+/* Beautiful fading glow for cinematic immersion */
+.glow-effect {
+  box-shadow: 0 0 30px rgba(0, 102, 255, 0.25);
+}
+
+/* Custom Hide Scrollbar Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
