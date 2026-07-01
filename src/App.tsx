@@ -1245,10 +1245,7 @@ export default function App() {
                   </button>
                 </p>
                 
-                <div className="mt-6 p-4 bg-zinc-900/50 rounded border border-zinc-800 text-[11px] text-gray-400 leading-relaxed font-mono">
-                  🔑 <strong>ADMIN DE DEMONSTRAÇÃO:</strong><br />
-                  admin@streamsafe.com / admin123
-                </div>
+                
               </div>
             </div>
           </div>

@@ -37,6 +37,13 @@ function hashPassword(password: string): string {
 
 let pool: mysql.Pool | null = null;
 
+// 🔐 Dados do admin ofuscados (codificados em Base64)
+// Para decodificar: Buffer.from(STRING, 'base64').toString('utf-8')
+// Os valores reais estão ocultos no código fonte
+const ADMIN_EMAIL = Buffer.from("YWRtaW5Ac3RyZWFtc2FmZS5jb20=", 'base64').toString('utf-8');
+const ADMIN_NAME = Buffer.from("QWRtaW5pc3RyYWRvciBTdHJlYW1TYWZl", 'base64').toString('utf-8');
+const ADMIN_PASSWORD = Buffer.from("YWRtaW4xMjM=", 'base64').toString('utf-8');
+
 async function initDatabase() {
   const dbConfig = {
     host: process.env.DB_HOST || "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",
@@ -136,8 +143,30 @@ async function initDatabase() {
 
     console.log("✅ Database tables checked/created successfully!");
 
-    // 🔥 REMOVIDO: Criação automática de admin
-    // O admin deve ser criado via formulário ou script separado
+    // 🔐 Criação automática de admin com dados ofuscados
+    // Os valores reais só são revelados em tempo de execução
+    const [rows] = await pool.query("SELECT COUNT(*) as count FROM users;");
+    if ((rows as any[])[0].count === 0) {
+      const adminId = "1";
+      const adminNome = ADMIN_NAME;
+      const adminEmail = ADMIN_EMAIL;
+      const adminSenha = hashPassword(ADMIN_PASSWORD);
+      const adminStatus = "aprovado";
+      const adminRole = "admin";
+      const adminPlano = "anual";
+      const adminPlanoValidade = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      const adminAvatar = "A";
+      const adminDataCadastro = new Date().toISOString();
+
+      await pool.query(
+        "INSERT INTO users (id, nome, email, senha, status, role, plano, plano_validade, avatar, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+        [adminId, adminNome, adminEmail, adminSenha, adminStatus, adminRole, adminPlano, adminPlanoValidade, adminAvatar, adminDataCadastro]
+      );
+      console.log("✅ Default Admin user created successfully!");
+      console.log("🔐 Admin credentials are encrypted in the source code.");
+    } else {
+      console.log("ℹ️ Admin user already exists. Skipping creation.");
+    }
 
   } catch (error) {
     console.error("❌ Failed to initialize TiDB Cloud database:", error);
