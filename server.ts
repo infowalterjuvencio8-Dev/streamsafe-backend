@@ -136,26 +136,8 @@ async function initDatabase() {
 
     console.log("✅ Database tables checked/created successfully!");
 
-    // Criar admin padrão
-    const [rows] = await pool.query("SELECT COUNT(*) as count FROM users;");
-    if ((rows as any[])[0].count === 0) {
-      const adminId = "1";
-      const adminNome = "Administrador StreamSafe";
-      const adminEmail = "admin@streamsafe.com";
-      const adminSenha = hashPassword("admin123");
-      const adminStatus = "aprovado";
-      const adminRole = "admin";
-      const adminPlano = "anual";
-      const adminPlanoValidade = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-      const adminAvatar = "A";
-      const adminDataCadastro = new Date().toISOString();
-
-      await pool.query(
-        "INSERT INTO users (id, nome, email, senha, status, role, plano, plano_validade, avatar, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-        [adminId, adminNome, adminEmail, adminSenha, adminStatus, adminRole, adminPlano, adminPlanoValidade, adminAvatar, adminDataCadastro]
-      );
-      console.log("✅ Default Admin user created!");
-    }
+    // 🔥 REMOVIDO: Criação automática de admin
+    // O admin deve ser criado via formulário ou script separado
 
   } catch (error) {
     console.error("❌ Failed to initialize TiDB Cloud database:", error);
