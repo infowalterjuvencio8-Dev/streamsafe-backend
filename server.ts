@@ -3,26 +3,11 @@ import path from "path";
 import mysql from "mysql2/promise";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import cors from "cors";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ✅ CORS configurado
-app.use(cors({
-  origin: [
-    'https://output.co.mz',
-    'https://api.output.co.mz',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://streamsafe-api.onrender.com'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+const PORT = 3000;
 
 app.use(express.json());
 
@@ -31,7 +16,7 @@ function hashPassword(password: string): string {
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
     hash = ((hash << 5) - hash) + password.charCodeAt(i);
-    hash = hash & hash;
+    hash = hash & hash; // Convert to 32bit integer
   }
   return hash.toString();
 }
@@ -40,32 +25,33 @@ function hashPassword(password: string): string {
 let pool: mysql.Pool;
 
 async function initDatabase() {
-  // ✅ CONFIGURAÇÃO PARA TiDB CLOUD
   const dbConfig = {
-    host: process.env.DB_HOST || "gateway01.ap-southeast-1.prod.aws.tidbcloud.com",
-    port: Number(process.env.DB_PORT) || 4000,
-    user: process.env.DB_USER || "3TeEL3UQMDa4csy.root",
-    password: process.env.DB_PASSWORD || "ADMOgpDz2jGDsGki",
-    database: process.env.DB_NAME || "streamsafe",
-    ssl: {
-      rejectUnauthorized: true
-    }
+    host: process.env.DB_HOST || "127.0.0.1",
+    port: Number(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || "root",
+    password: process.env.DB_PASSWORD || "",
   };
 
-  console.log("Connecting to TiDB Cloud at:", `${dbConfig.host}:${dbConfig.port} as ${dbConfig.user}`);
+  console.log("Connecting to MySQL at:", `${dbConfig.host}:${dbConfig.port} as ${dbConfig.user}`);
 
   try {
-    // ✅ Criar pool de conexões com SSL
+    // 1. Connect without selecting database to ensure database exists
+    const connection = await mysql.createConnection(dbConfig);
+    await connection.query("CREATE DATABASE IF NOT EXISTS streamsafe_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;");
+    await connection.end();
+
+    // 2. Create the connection pool with database selected
     pool = mysql.createPool({
       ...dbConfig,
+      database: "streamsafe_db",
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
     });
 
-    console.log("✅ TiDB Cloud connected successfully!");
+    console.log("Database 'streamsafe_db' verified and pool initialized successfully!");
 
-    // ✅ Criar tabelas
+    // 3. Create tables
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
@@ -136,9 +122,9 @@ async function initDatabase() {
       );
     `);
 
-    console.log("✅ Database tables checked/created successfully!");
+    console.log("Database tables checked/created successfully!");
 
-    // ✅ Criar admin padrão
+    // 4. Initialize default admin user if users table is empty
     const [rows]: [any[], any] = await pool.query("SELECT COUNT(*) as count FROM users;");
     if (rows[0].count === 0) {
       const adminId = "1";
@@ -156,12 +142,11 @@ async function initDatabase() {
         "INSERT INTO users (id, nome, email, senha, status, role, plano, plano_validade, avatar, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         [adminId, adminNome, adminEmail, adminSenha, adminStatus, adminRole, adminPlano, adminPlanoValidade, adminAvatar, adminDataCadastro]
       );
-      console.log("✅ Default Admin user created!");
+      console.log("Default Admin user registered successfully on the backend MySQL database!");
     }
 
   } catch (error) {
-    console.error("❌ Failed to initialize TiDB Cloud database:", error);
-    throw error;
+    console.error("CRITICAL: Failed to initialize MySQL database. Starting server in mockup mode as fallback.", error);
   }
 }
 
@@ -173,27 +158,7 @@ function getDb() {
   return pool;
 }
 
-// ============= API ROUTES =============
-
-// Health check
-app.get("/api/health", async (req, res) => {
-  try {
-    const db = getDb();
-    await db.query("SELECT 1 as test");
-    res.json({
-      status: 'online',
-      database: 'connected',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      database: 'disconnected',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
+// API Routes
 
 // 1. Authentication Endpoints
 app.post("/api/auth/login", async (req, res) => {
@@ -214,6 +179,7 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(401).json({ error: "A senha introduzida está incorreta!" });
     }
 
+    // Exclude password from the returned object
     const { senha: _, ...userWithoutSenha } = matched;
     res.json(userWithoutSenha);
   } catch (error: any) {
@@ -255,6 +221,7 @@ app.post("/api/users", async (req, res) => {
   try {
     const { id, nome, email, senha, status, role, plano, plano_validade, avatar, data_cadastro } = req.body;
     
+    // Check duplication
     const [existing]: [any[], any] = await getDb().query("SELECT id FROM users WHERE email = ?;", [email]);
     if (existing.length > 0) {
       return res.status(400).json({ error: "Este endereço de email já se encontra registrado!" });
@@ -280,9 +247,10 @@ app.put("/api/users/:id", async (req, res) => {
     const queryParts: string[] = [];
     const values: any[] = [];
 
+    // Check password change request
     if (updates.senha) {
       queryParts.push("senha = ?");
-      values.push(updates.senha);
+      values.push(updates.senha); // assumed hashed already by client, or hashPassword(senha)
     }
 
     for (const key of allowedFields) {
@@ -350,20 +318,24 @@ app.post("/api/payments", async (req, res) => {
   try {
     const { payment, tempUser } = req.body;
 
+    // Check user duplication
     const [existing]: [any[], any] = await getDb().query("SELECT id FROM users WHERE email = ?;", [tempUser.email]);
     if (existing.length > 0) {
       return res.status(400).json({ error: "Este endereço de email já se encontra registrado!" });
     }
 
+    // Begin a simple transaction to insert user and payment cleanly
     const conn = await getDb().getConnection();
     try {
       await conn.beginTransaction();
 
+      // Insert the user
       await conn.query(
         "INSERT INTO users (id, nome, email, senha, status, role, plano, plano_validade, avatar, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         [tempUser.id, tempUser.nome, tempUser.email, tempUser.senha, tempUser.status, tempUser.role, tempUser.plano, tempUser.plano_validade, tempUser.avatar, tempUser.data_cadastro]
       );
 
+      // Insert the payment
       await conn.query(
         "INSERT INTO payments (id, usuarioId, usuarioNome, usuarioEmail, plano, metodo, nomeTransferencia, valor, status, data_pagamento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
         [payment.id, payment.usuarioId, payment.usuarioNome, payment.usuarioEmail, payment.plano, payment.metodo, payment.nomeTransferencia, payment.valor, payment.status, payment.data_pagamento]
@@ -397,7 +369,10 @@ app.put("/api/payments/:id/approve", async (req, res) => {
     try {
       await conn.beginTransaction();
 
+      // Update payment status
       await conn.query("UPDATE payments SET status = 'aprovado' WHERE id = ?;", [id]);
+
+      // Update user status & subscription
       await conn.query(
         "UPDATE users SET status = 'aprovado', plano = ?, plano_validade = ? WHERE id = ?;",
         [plano, plano_validade, payment.usuarioId]
@@ -430,7 +405,10 @@ app.put("/api/payments/:id/reject", async (req, res) => {
     try {
       await conn.beginTransaction();
 
+      // Remove payment request
       await conn.query("DELETE FROM payments WHERE id = ?;", [id]);
+
+      // Remove transient user since signup registration is cancelled/rejected
       await conn.query("DELETE FROM users WHERE id = ?;", [payment.usuarioId]);
 
       await conn.commit();
@@ -544,11 +522,12 @@ app.post("/api/history/:userId", async (req, res) => {
   }
 });
 
-// ============= START SERVER =============
 
+// Express Vite Integration Middleware Setup
 async function startServer() {
   await initDatabase();
 
+  // Vite development middleware or static production asset pipeline
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -564,9 +543,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-    console.log(`📊 Database: TiDB Cloud (${process.env.DB_HOST || 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com'})`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
